@@ -44,5 +44,74 @@ document.querySelectorAll('[data-route]').forEach(b=>b.onclick=()=>{if(shipRoute
 $('shipForm').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(!['from','to','kind','contents','name','phone'].every(k=>d[k].trim())||!Number.isFinite(Number(d.weight))||Number(d.weight)<=0){toast('أكمل بيانات الشحنة');return}const ref='SHIP-'+Date.now().toString(36).toUpperCase();$('shipText').value=['بين بلدين | طلب عرض سعر شحن تجريبي',ref,'الاتجاه: '+(shipRoute==='EG-LB'?'مصر إلى لبنان':'لبنان إلى مصر'),'الاستلام: '+d.from,'التسليم: '+d.to,'نوع الشحنة: '+d.kind,'الوزن: '+d.weight+' كجم','الأبعاد: '+(d.size||'غير محددة'),'المحتويات: '+d.contents,'الاسم: '+d.name,'التواصل: '+d.phone,'السعر والمدة: بانتظار المراجعة'].join('\n');$('shipForm').classList.add('hide');$('shipResult').classList.remove('hide');$('shipResult').scrollIntoView({block:'nearest',behavior:'smooth'})};
 $('copyShip').onclick=async()=>{try{await navigator.clipboard.writeText($('shipText').value);toast('تم نسخ ملخص الشحن')}catch(e){$('shipText').focus();$('shipText').select();try{if(document.execCommand('copy'))toast('تم نسخ ملخص الشحن');else toast('انسخ النص يدويًا')}catch(e){toast('انسخ النص يدويًا')}}};
 $('newShip').onclick=()=>{$('shipForm').reset();$('shipText').value='';$('shipResult').classList.add('hide');$('shipForm').classList.remove('hide')};
+const oldSubmit = $('shipForm').onsubmit;
 
+$('shipForm').querySelector('.note').textContent =
+'استخدم بيانات افتراضية فقط. سيتم حفظ الطلب للتجربة.';
+
+$('shipBody').querySelector('.notice').textContent =
+'نسخة تجريبية لاختبار تسجيل طلبات الشحن.';
+
+$('shipResult').querySelector('.note').textContent =
+'تم تسجيل الطلب التجريبي بقاعدة البيانات.';
+
+document.querySelector('.footer span:last-child').textContent =
+'بين بلدين - نظام تسجيل الطلبات التجريبي';
+
+$('shipForm').onsubmit = async function(e) {
+  e.preventDefault();
+
+  const form = e.target;
+  const btn = form.querySelector('[type="submit"]');
+  if (btn.disabled) return;
+
+  const d = Object.fromEntries(new FormData(form));
+
+  if (!['from','to','kind','contents','name','phone'].every(k => d[k].trim()) ||
+      !Number.isFinite(Number(d.weight)) || Number(d.weight) <= 0) {
+    toast('أكمل بيانات الشحنة');
+    return;
+  }
+
+  const route = shipRoute;
+  btn.disabled = true;
+  btn.textContent = 'جارٍ التسجيل...';
+  document.querySelectorAll('[data-route]').forEach(b => b.disabled = true);
+
+  try {
+    const res = await fetch(
+      'https://nzvghfggeypfstejeyon.supabase.co/rest/v1/service_requests',
+      {
+        method: 'POST',
+        headers: {
+          'apikey': 'sb_publishable_KMtfwIhaHGVu6BlH7ik1Jg_fWdtlNwz',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          request_type: 'shipping',
+          direction: route === 'EG-LB' ? 'Egypt-Lebanon' : 'Lebanon-Egypt',
+          customer_name: d.name.trim(),
+          phone: d.phone.trim(),
+          details: {
+            ...d,
+            test: true
+          }
+        })
+      }
+    );
+
+    if (!res.ok) throw new Error(res.status);
+
+    oldSubmit(e);
+    toast('تم تسجيل الطلب بنجاح');
+
+  } catch (err) {
+    toast('تعذر تأكيد حفظ الطلب');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'إرسال طلب الشحن';
+    document.querySelectorAll('[data-route]').forEach(b => b.disabled = false);
+  }
+};
 </script></body></html>
